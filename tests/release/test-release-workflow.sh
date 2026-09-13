@@ -4,6 +4,7 @@ set -euo pipefail
 
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 WORKFLOW="${ROOT}/.github/workflows/release.yml"
+PROMOTION_WORKFLOW="${ROOT}/.github/workflows/promote-release.yml"
 
 require_text() {
   local text=$1
@@ -32,5 +33,28 @@ reject_text 'softprops/action-gh-release'
 reject_text 'draft: false'
 reject_text 'gh release create'
 reject_text 'docker buildx imagetools create'
+
+[[ -f ${PROMOTION_WORKFLOW} ]] || {
+  echo 'promotion workflow is missing' >&2
+  exit 1
+}
+for text in \
+  'workflow_dispatch:' \
+  'tag:' \
+  'build_run_id:' \
+  'actions: read' \
+  'packages: write' \
+  'gh release view' \
+  'isDraft' \
+  'headSha' \
+  'run-id: ${{ inputs.build_run_id }}' \
+  'pattern: digests-*' \
+  'type=raw,value=latest,enable=${{ steps.preflight.outputs.prerelease == '\''false'\'' }}' \
+  'docker buildx imagetools create'; do
+  grep -Fq -- "${text}" "${PROMOTION_WORKFLOW}" || {
+    printf 'promotion workflow is missing: %s\n' "${text}" >&2
+    exit 1
+  }
+done
 
 echo 'release workflow tests: PASS'

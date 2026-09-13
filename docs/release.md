@@ -53,15 +53,20 @@ Both matrix jobs call `softprops/action-gh-release@v2` — the action is idempot
 
 Each arch builds [`docker/Dockerfile`](../docker/Dockerfile) natively on its own runner and pushes **by digest** to `ghcr.io/proxysql/orchestrator` (no tag yet). The digest is uploaded as a workflow artifact for the merge job to consume.
 
-### 3. `docker-merge`
+### 3. `Promote Release` workflow
 
-Downloads both digests, runs `docker/metadata-action` to compute tags from the git tag:
+After the signed package release is public, dispatch
+`.github/workflows/promote-release.yml` with the release tag and the successful
+build workflow run ID. It verifies that the tag, build run, and public GitHub
+Release all identify the same commit before downloading both digests. It then
+runs `docker/metadata-action` to compute tags from the git tag:
 
 - `type=semver,pattern={{version}}` — e.g. `4.30.1`
 - `type=semver,pattern={{major}}.{{minor}}` — e.g. `4.30`
 - `type=raw,value=latest` — only when the tag does **not** contain `rc`
 
-Then uses `docker buildx imagetools create` to assemble a multi-arch manifest under all those tags, and inspects the result.
+It uses `docker buildx imagetools create` to assemble a multi-arch manifest
+under those tags and verifies that the result contains both amd64 and arm64.
 
 ## Verifying a release
 
