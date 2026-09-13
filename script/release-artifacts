@@ -100,7 +100,8 @@ validate_packages() {
         [[ ${actual_arch} == "${expected_arch}" ]]
         ;;
       *.tar.gz)
-        tar -tzf "${path}" | grep -Fxq './usr/local/orchestrator/orchestrator'
+        tar -tzf "${path}" | grep -Fx './usr/local/orchestrator/orchestrator' \
+          >/dev/null
         ;;
     esac
   done < <(expected_unsigned "${version}")

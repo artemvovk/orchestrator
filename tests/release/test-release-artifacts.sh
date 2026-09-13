@@ -84,13 +84,21 @@ printf '%s\t4.31.0\t%s\t%s\n' \
 EOF
 cat >"${TMPDIR}/fake-bin/tar" <<'EOF'
 #!/usr/bin/env bash
+set -euo pipefail
 if [[ ${FAKE_TAR_MISSING:-0} != 1 ]]; then
   printf './usr/local/orchestrator/orchestrator\n'
+  if [[ ${FAKE_TAR_LONG:-0} == 1 ]]; then
+    for ((line = 0; line < 20000; line++)); do
+      printf './usr/local/orchestrator/resources/padding-%08d\n' "${line}"
+    done
+  fi
 fi
 EOF
 chmod +x "${TMPDIR}/fake-bin/"*
 
 PATH="${TMPDIR}/fake-bin:${PATH}" \
+  "${SCRIPT}" validate-packages "${VERSION}" "${assets}"
+FAKE_TAR_LONG=1 PATH="${TMPDIR}/fake-bin:${PATH}" \
   "${SCRIPT}" validate-packages "${VERSION}" "${assets}"
 for failure in FAKE_DEB_ARCH=wrong FAKE_RPM_RELEASE=2 FAKE_TAR_MISSING=1; do
   if (export "${failure}"; PATH="${TMPDIR}/fake-bin:${PATH}" \

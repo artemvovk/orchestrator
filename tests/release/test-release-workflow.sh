@@ -56,6 +56,8 @@ for text in \
   'pattern: digests-*' \
   'https://repo.proxysql.com/ProxySQL/repo_pub_key' \
   '--verify SHA256SUMS.asc SHA256SUMS' \
+  'script/release-artifacts expected-unsigned' \
+  'actual_checksum_names' \
   'sha256sum -c SHA256SUMS' \
   'type=raw,value=latest,enable=${{ steps.preflight.outputs.prerelease == '\''false'\'' }}' \
   'docker buildx imagetools create'; do

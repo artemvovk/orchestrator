@@ -108,6 +108,15 @@ jobs:
         gpg --batch --import "${verification_root}/repo_pub_key" >/dev/null 2>&1
 
         cd "${assets}"
+        expected_checksum_names=$(
+          "${GITHUB_WORKSPACE}/script/release-artifacts" expected-unsigned \
+            "${{ steps.preflight.outputs.version }}"
+        )
+        test "$(wc -l <SHA256SUMS)" -eq 14
+        actual_checksum_names=$(
+          sed -nE 's/^[0-9a-f]{64}  ([^/]+)$/\1/p' SHA256SUMS | LC_ALL=C sort
+        )
+        test "${actual_checksum_names}" = "${expected_checksum_names}"
         signature_status=$(gpg --batch --status-fd=1 \
           --verify SHA256SUMS.asc SHA256SUMS 2>/dev/null)
         awk -v expected="${SIGNING_FINGERPRINT}" '
