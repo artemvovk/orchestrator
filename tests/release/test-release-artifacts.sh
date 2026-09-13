@@ -53,6 +53,53 @@ assets="${TMPDIR}/assets"
 create_assets "${assets}"
 "${SCRIPT}" validate-unsigned "${VERSION}" "${assets}"
 
+mkdir -p "${TMPDIR}/fake-bin"
+cat >"${TMPDIR}/fake-bin/dpkg-deb" <<'EOF'
+#!/usr/bin/env bash
+base=${2##*/}
+package=${base%%_*}
+version=${base#*_}
+version=${version%-1_*}
+arch=${base##*_}
+arch=${arch%.deb}
+case $3 in
+  Package) printf '%s\n' "${package}" ;;
+  Version) printf '1:%s-1\n' "${version}" ;;
+  Architecture) printf '%s\n' "${FAKE_DEB_ARCH:-${arch}}" ;;
+esac
+EOF
+cat >"${TMPDIR}/fake-bin/rpm" <<'EOF'
+#!/usr/bin/env bash
+base=${!#}
+base=${base##*/}
+case ${base} in
+  orchestrator-cli-*) package=orchestrator-cli ;;
+  orchestrator-client-*) package=orchestrator-client ;;
+  *) package=orchestrator ;;
+esac
+arch=${base%.rpm}
+arch=${arch##*.}
+printf '%s\t4.31.0\t%s\t%s\n' \
+  "${package}" "${FAKE_RPM_RELEASE:-1}" "${arch}"
+EOF
+cat >"${TMPDIR}/fake-bin/tar" <<'EOF'
+#!/usr/bin/env bash
+if [[ ${FAKE_TAR_MISSING:-0} != 1 ]]; then
+  printf './usr/local/orchestrator/orchestrator\n'
+fi
+EOF
+chmod +x "${TMPDIR}/fake-bin/"*
+
+PATH="${TMPDIR}/fake-bin:${PATH}" \
+  "${SCRIPT}" validate-packages "${VERSION}" "${assets}"
+for failure in FAKE_DEB_ARCH=wrong FAKE_RPM_RELEASE=2 FAKE_TAR_MISSING=1; do
+  if (export "${failure}"; PATH="${TMPDIR}/fake-bin:${PATH}" \
+      "${SCRIPT}" validate-packages "${VERSION}" "${assets}") >/dev/null 2>&1; then
+    echo "expected package metadata validation failure: ${failure}" >&2
+    exit 1
+  fi
+done
+
 missing="${TMPDIR}/missing"
 create_assets "${missing}"
 rm "${missing}/orchestrator-4.31.0-linux-arm64.tar.gz"

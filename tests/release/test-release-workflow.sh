@@ -26,6 +26,7 @@ require_text 'actions/upload-artifact@v4'
 require_text 'name: orchestrator-packages-${{ matrix.goarch }}'
 require_text 'validate-package-stage:'
 require_text 'script/release-artifacts validate-unsigned'
+require_text 'script/release-artifacts validate-packages'
 require_text 'script/release-artifacts write-unsigned-checksums'
 require_text 'name: orchestrator-unsigned-manifest'
 
@@ -33,6 +34,10 @@ reject_text 'softprops/action-gh-release'
 reject_text 'draft: false'
 reject_text 'gh release create'
 reject_text 'docker buildx imagetools create'
+if grep -Eq 'retention-days: 1$' "${WORKFLOW}"; then
+  echo 'digest artifact retention is too short for reviewed publication' >&2
+  exit 1
+fi
 
 [[ -f ${PROMOTION_WORKFLOW} ]] || {
   echo 'promotion workflow is missing' >&2
@@ -49,6 +54,9 @@ for text in \
   'headSha' \
   'run-id: ${{ inputs.build_run_id }}' \
   'pattern: digests-*' \
+  'https://repo.proxysql.com/ProxySQL/repo_pub_key' \
+  '--verify SHA256SUMS.asc SHA256SUMS' \
+  'sha256sum -c SHA256SUMS' \
   'type=raw,value=latest,enable=${{ steps.preflight.outputs.prerelease == '\''false'\'' }}' \
   'docker buildx imagetools create'; do
   grep -Fq -- "${text}" "${PROMOTION_WORKFLOW}" || {

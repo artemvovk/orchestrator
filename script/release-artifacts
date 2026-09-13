@@ -7,6 +7,7 @@ usage() {
 Usage:
   release-artifacts expected-unsigned VERSION
   release-artifacts validate-unsigned VERSION DIRECTORY
+  release-artifacts validate-packages VERSION DIRECTORY
   release-artifacts write-unsigned-checksums VERSION DIRECTORY OUTPUT
 EOF
   exit 2
@@ -64,6 +65,47 @@ validate_unsigned() {
   fi
 }
 
+validate_packages() {
+  local version=$1 directory=$2 asset path
+  local expected_package expected_version expected_arch rpm_suffix
+  local actual_package actual_version actual_release actual_arch
+
+  validate_unsigned "${version}" "${directory}"
+  while IFS= read -r asset; do
+    path=${directory}/${asset}
+    case ${asset} in
+      *.deb)
+        expected_package=${asset%%_*}
+        expected_version=1:${version}-1
+        expected_arch=${asset##*_}
+        expected_arch=${expected_arch%.deb}
+        actual_package=$(dpkg-deb -f "${path}" Package)
+        actual_version=$(dpkg-deb -f "${path}" Version)
+        actual_arch=$(dpkg-deb -f "${path}" Architecture)
+        [[ ${actual_package} == "${expected_package}" ]]
+        [[ ${actual_version} == "${expected_version}" ]]
+        [[ ${actual_arch} == "${expected_arch}" ]]
+        ;;
+      *.rpm)
+        expected_arch=${asset%.rpm}
+        expected_arch=${expected_arch##*.}
+        rpm_suffix=-${version}-1.${expected_arch}.rpm
+        expected_package=${asset%"${rpm_suffix}"}
+        IFS=$'\t' read -r actual_package actual_version actual_release actual_arch < <(
+          rpm -qp --qf $'%{NAME}\t%{VERSION}\t%{RELEASE}\t%{ARCH}\n' "${path}"
+        )
+        [[ ${actual_package} == "${expected_package}" ]]
+        [[ ${actual_version} == "${version}" ]]
+        [[ ${actual_release} == 1 ]]
+        [[ ${actual_arch} == "${expected_arch}" ]]
+        ;;
+      *.tar.gz)
+        tar -tzf "${path}" | grep -Fxq './usr/local/orchestrator/orchestrator'
+        ;;
+    esac
+  done < <(expected_unsigned "${version}")
+}
+
 write_unsigned_checksums() {
   local version=$1 directory=$2 output=$3 asset output_dir temporary
 
@@ -88,6 +130,10 @@ case ${command} in
   validate-unsigned)
     [[ $# -eq 3 ]] || usage
     validate_unsigned "$2" "$3"
+    ;;
+  validate-packages)
+    [[ $# -eq 3 ]] || usage
+    validate_packages "$2" "$3"
     ;;
   write-unsigned-checksums)
     [[ $# -eq 4 ]] || usage

@@ -150,9 +150,9 @@ signed unless they pass through the production release process.
   them again. It cannot replace public assets.
 - If container promotion fails, leave the signed release untouched and rerun
   promotion with the same tag and build run after fixing the issue.
-- Digest artifacts are retained for one day and package artifacts for fourteen
-  days. Complete review and promotion within those windows or rerun the build
-  from the unchanged tag.
+- Digest and package workflow artifacts are retained for fourteen days.
+  Complete review and promotion within that window or rerun the build from the
+  unchanged tag.
 
 ## Permissions and secrets
 

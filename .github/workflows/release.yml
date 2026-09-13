@@ -85,6 +85,7 @@ jobs:
         version="${TAG_NAME#v}"
         test "$(git rev-parse HEAD)" = "${EXPECTED_SHA}"
         script/release-artifacts validate-unsigned "${version}" dist
+        script/release-artifacts validate-packages "${version}" dist
         script/release-artifacts write-unsigned-checksums \
           "${version}" dist unsigned-SHA256SUMS
 
@@ -144,4 +145,4 @@ jobs:
         name: digests-${{ matrix.arch }}
         path: /tmp/digests/*
         if-no-files-found: error
-        retention-days: 1
+        retention-days: 14

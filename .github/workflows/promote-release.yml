@@ -77,6 +77,46 @@ jobs:
         printf 'tag=%s\nversion=%s\nprerelease=%s\n' \
           "${TAG}" "${version}" "${prerelease}" >>"${GITHUB_OUTPUT}"
 
+    - name: Verify signed release assets
+      env:
+        GH_TOKEN: ${{ github.token }}
+        TAG: ${{ steps.preflight.outputs.tag }}
+        SIGNING_FINGERPRINT: 653F85BB38256DF8A96206C3E8CA2E8D8217C97E
+        PUBLIC_KEY_URL: https://repo.proxysql.com/ProxySQL/repo_pub_key
+      run: |
+        set -euo pipefail
+        verification_root=$(mktemp -d)
+        trap 'rm -rf "${verification_root}"' EXIT
+        assets=${verification_root}/assets
+        export GNUPGHOME=${verification_root}/gnupg
+        mkdir -m 700 "${assets}" "${GNUPGHOME}"
+
+        gh release download "${TAG}" -R "${GITHUB_REPOSITORY}" --dir "${assets}"
+        curl -fSLo "${verification_root}/repo_pub_key" "${PUBLIC_KEY_URL}"
+        primary_fingerprints=$(
+          gpg --batch --show-keys --with-colons --with-fingerprint \
+            "${verification_root}/repo_pub_key" |
+            awk -F: '
+              $1 == "pub" {want_primary_fingerprint=1; next}
+              want_primary_fingerprint && $1 == "fpr" {
+                print $10
+                want_primary_fingerprint=0
+              }
+            '
+        )
+        test "${primary_fingerprints}" = "${SIGNING_FINGERPRINT}"
+        gpg --batch --import "${verification_root}/repo_pub_key" >/dev/null 2>&1
+
+        cd "${assets}"
+        signature_status=$(gpg --batch --status-fd=1 \
+          --verify SHA256SUMS.asc SHA256SUMS 2>/dev/null)
+        awk -v expected="${SIGNING_FINGERPRINT}" '
+          $1 == "[GNUPG:]" && $2 == "VALIDSIG" &&
+            ($3 == expected || $NF == expected) {valid=1}
+          END {exit valid ? 0 : 1}
+        ' <<<"${signature_status}"
+        sha256sum -c SHA256SUMS
+
     - name: Download image digests from the selected build
       uses: actions/download-artifact@v4
       with:

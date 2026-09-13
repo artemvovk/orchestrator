@@ -59,15 +59,19 @@ gpg --verify orchestrator-X.Y.Z-linux-amd64.tar.gz.asc \
 Replace the version and architecture with the downloaded filename and confirm
 the expected full fingerprint.
 
-RPMs have an embedded `rpmsign` signature. Import the verified public key and
-check a package before installation:
+RPMs have an embedded `rpmsign` signature. Import the verified public key into
+a disposable RPM database and check a package before installation:
 
 ```bash
-sudo rpmkeys --import proxysql-package-signing-key.asc
-rpmkeys --checksig orchestrator-X.Y.Z-1.x86_64.rpm
+RPM_VERIFY_DB=$(mktemp -d)
+rpmkeys --dbpath "$RPM_VERIFY_DB" --import proxysql-package-signing-key.asc
+rpmkeys --checksig --dbpath "$RPM_VERIFY_DB" \
+  orchestrator-X.Y.Z-1.x86_64.rpm
+rm -rf "$RPM_VERIFY_DB"
 ```
 
-The result must report valid digests and signatures. For RPM repository
+The result must report valid digests and signatures; the disposable database
+contains only the full-fingerprint key checked above. For RPM repository
 configuration, `gpgcheck=1` checks package signatures. `repo_gpgcheck=1`
 instead checks repository metadata and works only when that metadata is also
 signed; GitHub release assets do not provide signed RPM repository metadata.
