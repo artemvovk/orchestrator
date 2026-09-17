@@ -26,6 +26,58 @@ func TestNormalizeRaftNodePassesThroughLiteralIP(t *testing.T) {
 	}
 }
 
+func withConfig(t *testing.T, httpAdvertise, listenAddress string, useSSL bool, fn func()) {
+	t.Helper()
+	origHTTPAdvertise := config.Config.HTTPAdvertise
+	origListenAddress := config.Config.ListenAddress
+	origUseSSL := config.Config.UseSSL
+	config.Config.HTTPAdvertise = httpAdvertise
+	config.Config.ListenAddress = listenAddress
+	config.Config.UseSSL = useSSL
+	defer func() {
+		config.Config.HTTPAdvertise = origHTTPAdvertise
+		config.Config.ListenAddress = origListenAddress
+		config.Config.UseSSL = origUseSSL
+	}()
+	fn()
+}
+
+func TestComputeLeaderURIWithIPv6Advertise(t *testing.T) {
+	withConfig(t, "", "0.0.0.0:3000", false, func() {
+		uri, err := computeLeaderURI("[::1]:10008")
+		if err != nil {
+			t.Fatalf("computeLeaderURI returned error: %+v", err)
+		}
+		if uri != "http://[::1]:3000" {
+			t.Errorf("expected %q, got %q", "http://[::1]:3000", uri)
+		}
+	})
+}
+
+func TestComputeLeaderURIWithHostname(t *testing.T) {
+	withConfig(t, "", "0.0.0.0:3000", false, func() {
+		uri, err := computeLeaderURI("orchestrator-0.svc.cluster.local:10008")
+		if err != nil {
+			t.Fatalf("computeLeaderURI returned error: %+v", err)
+		}
+		if uri != "http://orchestrator-0.svc.cluster.local:3000" {
+			t.Errorf("expected %q, got %q", "http://orchestrator-0.svc.cluster.local:3000", uri)
+		}
+	})
+}
+
+func TestComputeLeaderURIPrefersExplicitHTTPAdvertise(t *testing.T) {
+	withConfig(t, "https://explicit:9999", "0.0.0.0:3000", false, func() {
+		uri, err := computeLeaderURI("[::1]:10008")
+		if err != nil {
+			t.Fatalf("computeLeaderURI returned error: %+v", err)
+		}
+		if uri != "https://explicit:9999" {
+			t.Errorf("expected %q, got %q", "https://explicit:9999", uri)
+		}
+	})
+}
+
 func TestNormalizeRaftNodePassesThroughLiteralIPv6(t *testing.T) {
 	node, err := normalizeRaftNode("[::1]:10008")
 	if err != nil {

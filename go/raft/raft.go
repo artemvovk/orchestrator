@@ -22,7 +22,6 @@ import (
 	"math/rand"
 	"net"
 	"strconv"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -94,7 +93,7 @@ func FatalRaftError(err error) error {
 	return err
 }
 
-func computeLeaderURI() (uri string, err error) {
+func computeLeaderURI(raftAdvertise string) (uri string, err error) {
 	if config.Config.HTTPAdvertise != "" {
 		// Explicitly given
 		return config.Config.HTTPAdvertise, nil
@@ -105,14 +104,16 @@ func computeLeaderURI() (uri string, err error) {
 		scheme = "https"
 	}
 
-	hostname := strings.Split(config.Config.RaftAdvertise, ":")[0]
-	listenTokens := strings.Split(config.Config.ListenAddress, ":")
-	if len(listenTokens) < 2 {
+	hostname, _, err := net.SplitHostPort(raftAdvertise)
+	if err != nil {
+		hostname = raftAdvertise
+	}
+	_, port, err := net.SplitHostPort(config.Config.ListenAddress)
+	if err != nil {
 		return uri, fmt.Errorf("computeLeaderURI: cannot determine listen port out of config.Config.ListenAddress: %+v", config.Config.ListenAddress)
 	}
-	port := listenTokens[1]
 
-	uri = fmt.Sprintf("%s://%s:%s", scheme, hostname, port)
+	uri = fmt.Sprintf("%s://%s", scheme, net.JoinHostPort(hostname, port))
 	return uri, nil
 }
 
@@ -147,7 +148,7 @@ func Setup(applier CommandApplier, snapshotCreatorApplier SnapshotCreatorApplier
 		return log.Errorf("failed to open raft store: %s", err.Error())
 	}
 
-	thisLeaderURI, err = computeLeaderURI()
+	thisLeaderURI, err = computeLeaderURI(raftAdvertise)
 	if err != nil {
 		return FatalRaftError(err)
 	}
