@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"math/rand"
 	"net"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -175,37 +176,24 @@ func getRaft() *raft.Raft {
 	return store.raft
 }
 
-func normalizeRaftHostnameIP(host string) (string, error) {
-	if ip := net.ParseIP(host); ip != nil {
-		// this is a valid IP address.
-		return host, nil
-	}
-	ips, err := net.LookupIP(host)
-	if err != nil {
-		// resolve failed. But we don't want to fail the entire operation for that
-		_ = log.Errore(err)
-		return host, nil
-	}
-	// resolve success!
-	for _, ip := range ips {
-		return ip.String(), nil
-	}
-	return host, fmt.Errorf("%+v resolved but no IP found", host)
-}
-
 // normalizeRaftNode attempts to make sure there's a port to the given node.
-// It consults the DefaultRaftPort when there isn't
+// It consults the DefaultRaftPort when there isn't. The host is kept as
+// given (never resolved to an IP), since it becomes this node's persistent
+// raft ServerID.
 func normalizeRaftNode(node string) (string, error) {
-	hostPort := strings.Split(node, ":")
-	host, err := normalizeRaftHostnameIP(hostPort[0])
+	host, port, err := net.SplitHostPort(node)
 	if err != nil {
-		return host, err
+		host, port = node, ""
 	}
-	if len(hostPort) > 1 {
-		return fmt.Sprintf("%s:%s", host, hostPort[1]), nil
+	if net.ParseIP(host) == nil {
+		if _, err := net.LookupHost(host); err != nil {
+			_ = log.Errore(err)
+		}
+	}
+	if port != "" {
+		return net.JoinHostPort(host, port), nil
 	} else if config.Config.DefaultRaftPort != 0 {
-		// No port specified, add one
-		return fmt.Sprintf("%s:%d", host, config.Config.DefaultRaftPort), nil
+		return net.JoinHostPort(host, strconv.Itoa(config.Config.DefaultRaftPort)), nil
 	} else {
 		return host, nil
 	}
